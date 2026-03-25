@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>출퇴근 관리</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/heroicons@2.0.18/dist/heroicons.min.js"></script>
+</head>
+
+<body class="bg-gray-100">
+
+<div class="max-w-md mx-auto p-4">
+  <h1 class="text-xl font-bold mb-4">출퇴근 관리</h1>
+
+  <!-- 리스트 -->
+  <div id="list" class="space-y-3"></div>
+</div>
+
+<!-- 추가 버튼 -->
+<button onclick="openModal()"
+  class="fixed bottom-6 right-6 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg text-2xl">
+  +
+</button>
+<button onclick="downloadExcel()"
+  class="fixed bottom-3 left-6 mb-4 px-4 py-2 bg-green-500 text-white rounded">
+  <svg xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke-width="2"
+    stroke="currentColor"
+    class="w-6 h-6">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16" />
+  </svg>
+</button>
+
+<!-- 모달 -->
+<div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center">
+  <div class="bg-white w-full sm:w-96 p-6 rounded-t-2xl sm:rounded">
+
+    <h2 class="text-lg font-bold mb-4">기록 추가</h2>
+
+    <input id="date" type="date" class="w-full mb-3 border p-3 text-lg rounded" />
+
+    <select id="type" onchange="handleTypeChange()" class="w-full mb-3 border p-3 text-lg rounded">
+      <option value="출근">출근</option>
+      <option value="퇴근">퇴근</option>
+    </select>
+
+    <input id="start" type="time" class="w-full mb-3 border p-3 text-lg rounded" />
+    <input id="end" type="time" class="w-full mb-3 border p-3 text-lg rounded" />
+
+    <input id="memo" type="text" placeholder="비고"
+      class="w-full mb-3 border p-3 text-lg rounded" />
+
+    <div class="flex justify-end gap-2">
+      <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded">취소</button>
+      <button onclick="addData()" class="px-4 py-2 bg-blue-500 text-white rounded">저장</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "commuteData";
+
+function getData() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function getDayOfWeek(dateStr) {
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return days[new Date(dateStr).getDay()];
+}
+
+function calcMinutes(start, end) {
+  if (!start || !end) return "";
+  const s = new Date(`1970-01-01T${start}`);
+  const e = new Date(`1970-01-01T${end}`);
+  return Math.floor((e - s) / 60000);
+}
+
+function render() {
+  const data = getData();
+
+  // 최신순 정렬
+  data.sort((a, b) => b.date.localeCompare(a.date));
+
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  data.forEach((item, index) => {
+    const div = document.createElement("div");
+    div.className = "bg-white p-4 rounded-xl shadow";
+
+    div.innerHTML = `
+      <div class="flex justify-between items-center mb-2">
+        <div class="font-bold">
+          ${item.date} (${getDayOfWeek(item.date)})
+        </div>
+        <button onclick="remove(${index})" class="text-red-500 text-sm">삭제</button>
+      </div>
+
+      <div class="text-sm mb-2 ${item.type === "출근" ? "text-blue-500" : "text-green-500"}"
+        contenteditable onblur="update(${index}, 'type', this.innerText)">
+        ${item.type}
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 text-sm">
+
+        <div>
+          <div class="text-gray-400">출발</div>
+          <input type="time" value="${item.start}"
+            onchange="update(${index}, 'start', this.value)"
+            class="w-full border rounded p-1"/>
+        </div>
+
+        <div>
+          <div class="text-gray-400">도착</div>
+          <input type="time" value="${item.end}"
+            onchange="update(${index}, 'end', this.value)"
+            class="w-full border rounded p-1"/>
+        </div>
+
+        <div>
+          <div class="text-gray-400">소요시간</div>
+          <div>${calcMinutes(item.start, item.end)} 분</div>
+        </div>
+
+        <div>
+          <div class="text-gray-400">비고</div>
+          <input type="text" value="${item.memo || ""}"
+            onchange="update(${index}, 'memo', this.value)"
+            class="w-full border rounded p-1"/>
+        </div>
+
+      </div>
+    `;
+
+    list.appendChild(div);
+  });
+}
+
+function addData() {
+  const date = document.getElementById("date").value;
+  const type = document.getElementById("type").value;
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  const memo = document.getElementById("memo").value;
+
+  if (!date) {
+    alert("날짜 입력 필요");
+    return;
+  }
+
+  const data = getData();
+  data.push({ date, type, start, end, memo });
+
+  saveData(data);
+  closeModal();
+  render();
+}
+
+function update(index, key, value) {
+  const data = getData();
+  data[index][key] = value;
+  saveData(data);
+  render();
+}
+
+function remove(index) {
+  const data = getData();
+  data.splice(index, 1);
+  saveData(data);
+  render();
+}
+
+function handleTypeChange() {
+  const type = document.getElementById("type").value;
+
+  const now = new Date();
+  const time = now.toTimeString().slice(0, 5);
+
+  if (type === "출근") {
+    document.getElementById("start").value = time;
+    document.getElementById("end").value = "";
+  } else {
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = time;
+  }
+}
+
+function openModal() {
+  const now = new Date();
+  const date = now.toISOString().split("T")[0];
+  const time = now.toTimeString().slice(0, 5);
+
+  document.getElementById("date").value = date;
+
+  // 기본값: 출근
+  document.getElementById("type").value = "출근";
+
+  document.getElementById("start").value = time;
+  document.getElementById("end").value = "";
+
+  document.getElementById("modal").classList.remove("hidden");
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.add("hidden");
+}
+
+function downloadExcel() {
+  const data = getData();
+
+  if (data.length === 0) {
+    alert("데이터 없음");
+    return;
+  }
+
+  const formatted = data.map(item => ({
+    "일자": item.date,
+    "요일": getDayOfWeek(item.date),
+    "출/퇴근": item.type,
+    "출발": item.start,
+    "도착": item.end,
+    "걸린시간(분)": calcMinutes(item.start, item.end),
+    "비고": item.memo || ""
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(formatted);
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "출퇴근");
+
+  XLSX.writeFile(workbook, "출퇴근기록.xlsx");
+}
+
+render();
+</script>
+
+</body>
+</html>
